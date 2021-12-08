@@ -13,3 +13,4 @@ token_eos = event_dim + 2
 vocab_size = event_dim + 3
 
 train_id = 'wikifonia-melody'
+gpu_id = '2'

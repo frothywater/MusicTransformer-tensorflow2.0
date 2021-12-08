@@ -71,6 +71,7 @@ eval_summary_writer = tf.summary.create_file_writer(eval_log_dir)
 # Train Start
 print(">>> Start training")
 step = 0
+device = f"/device:GPU:{par.gpu_id}"
 batch_count = len(dataset.files) // batch_size
 
 for e in range(epochs):
@@ -80,7 +81,8 @@ for e in range(epochs):
     for b in range(batch_count):
         batch_start_time = time.time()
         batch_x, batch_y = dataset.slide_seq2seq_batch(batch_size, max_seq)
-        result_metrics = mt.train_on_batch(batch_x, batch_y)
+        with tf.device(device):
+            result_metrics = mt.train_on_batch(batch_x, batch_y)
         batch_end_time = time.time()
 
         with train_summary_writer.as_default():
@@ -97,7 +99,8 @@ for e in range(epochs):
 
     # evaluate
     eval_x, eval_y = dataset.slide_seq2seq_batch(batch_size, max_seq, 'eval')
-    eval_result_metrics, _ = mt.evaluate(eval_x, eval_y)
+    with tf.device(device):
+        eval_result_metrics, _ = mt.evaluate(eval_x, eval_y)
     mt.save(save_path)
     epoch_end_time = time.time()
 
