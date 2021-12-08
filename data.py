@@ -80,10 +80,10 @@ class Data:
         with open(fname, 'rb') as f:
             data = pickle.load(f)
         if max_length is not None:
-            if max_length <= len(data):
-                start = random.randrange(0,len(data) - max_length)
+            if len(data) > max_length:
+                start = random.randrange(0, len(data) - max_length)
                 data = data[start:start + max_length]
-            else:
+            elif len(data) < max_length:
                 data = np.append(data, par.token_eos)
                 while len(data) < max_length:
                     data = np.append(data, par.pad_token)
