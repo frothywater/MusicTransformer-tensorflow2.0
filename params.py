@@ -1,4 +1,4 @@
-import midi_processor.processor as sequence
+import processor as sequence
 # max_seq = 2048
 max_seq=2048
 l_r = 0.001

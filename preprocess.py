@@ -7,8 +7,8 @@ from progress.bar import Bar
 import tensorflow as tf
 import utils
 import params as par
-from midi_processor.processor import encode_midi, decode_midi
-from midi_processor import processor
+from processor import encode_midi, decode_midi
+from processor import processor
 import config
 import random
 

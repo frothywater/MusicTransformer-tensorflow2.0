@@ -7,7 +7,7 @@ from data import Data
 import utils
 import datetime
 import argparse
-from midi_processor.processor import decode_midi, encode_midi
+from processor import decode_midi, encode_midi
 
 
 parser = argparse.ArgumentParser()
