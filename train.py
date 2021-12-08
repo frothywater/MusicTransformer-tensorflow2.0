@@ -4,10 +4,10 @@ from custom import callback
 import params as par
 from tensorflow.python.keras.optimizer_v2.adam import Adam
 from data import Data
-import utils
+import sys
+import time
 import argparse
 import datetime
-import sys
 
 tf.executing_eagerly()
 
@@ -41,7 +41,7 @@ num_layer = args.num_layers
 
 
 # load data
-dataset = Data('dataset/processed')
+dataset = Data('data/dataset')
 print(dataset)
 
 
@@ -62,55 +62,52 @@ mt.compile(optimizer=opt, loss=callback.transformer_dist_train_loss)
 
 
 # define tensorboard writer
-current_time = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-train_log_dir = 'logs/mt_decoder/'+current_time+'/train'
-eval_log_dir = 'logs/mt_decoder/'+current_time+'/eval'
+train_log_dir = 'logs/'+par.train_id+'/train'
+eval_log_dir = 'logs/'+par.train_id+'/eval'
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 eval_summary_writer = tf.summary.create_file_writer(eval_log_dir)
 
 
 # Train Start
-idx = 0
+print(">>> Start training")
+step = 0
+batch_count = len(dataset.files) // batch_size
+
 for e in range(epochs):
     mt.reset_metrics()
-    for b in range(len(dataset.files) // batch_size):
-        try:
-            batch_x, batch_y = dataset.slide_seq2seq_batch(batch_size, max_seq)
-        except:
-            continue
+    epoch_start_time = time.time()
+
+    for b in range(batch_count):
+        batch_start_time = time.time()
+        batch_x, batch_y = dataset.slide_seq2seq_batch(batch_size, max_seq)
         result_metrics = mt.train_on_batch(batch_x, batch_y)
-        if b % 100 == 0:
-            eval_x, eval_y = dataset.slide_seq2seq_batch(batch_size, max_seq, 'eval')
-            eval_result_metrics, weights = mt.evaluate(eval_x, eval_y)
-            mt.save(save_path)
-            with train_summary_writer.as_default():
-                if b == 0:
-                    tf.summary.histogram("target_analysis", batch_y, step=e)
-                    tf.summary.histogram("source_analysis", batch_x, step=e)
+        batch_end_time = time.time()
 
-                tf.summary.scalar('loss', result_metrics[0], step=idx)
-                tf.summary.scalar('accuracy', result_metrics[1], step=idx)
+        with train_summary_writer.as_default():
+            tf.summary.scalar('loss', result_metrics[0], step=step)
+            tf.summary.scalar('accuracy', result_metrics[1], step=step)
 
-            with eval_summary_writer.as_default():
-                if b == 0:
-                    mt.sanity_check(eval_x, eval_y, step=e)
+        batch_time = batch_end_time - batch_start_time
+        sys.stdout.write(
+            f"epoch: {e+1}/{epochs}, batch: {b+1}/{batch_count} | "
+            + f"loss: {result_metrics[0]:5f}, accuracy: {result_metrics[1]:5f}, time: {batch_time:3f}s\r"
+        )
+        sys.stdout.flush()
+        step += 1
 
-                tf.summary.scalar('loss', eval_result_metrics[0], step=idx)
-                tf.summary.scalar('accuracy', eval_result_metrics[1], step=idx)
-                for i, weight in enumerate(weights):
-                    with tf.name_scope("layer_%d" % i):
-                        with tf.name_scope("w"):
-                            utils.attention_image_summary(weight, step=idx)
-                # for i, weight in enumerate(weights):
-                #     with tf.name_scope("layer_%d" % i):
-                #         with tf.name_scope("_w0"):
-                #             utils.attention_image_summary(weight[0])
-                #         with tf.name_scope("_w1"):
-                #             utils.attention_image_summary(weight[1])
-            idx += 1
-            print('\n====================================================')
-            print('Epoch/Batch: {}/{}'.format(e, b))
-            print('Train >>>> Loss: {:6.6}, Accuracy: {}'.format(result_metrics[0], result_metrics[1]))
-            print('Eval >>>> Loss: {:6.6}, Accuracy: {}'.format(eval_result_metrics[0], eval_result_metrics[1]))
+    # evaluate
+    eval_x, eval_y = dataset.slide_seq2seq_batch(batch_size, max_seq, 'eval')
+    eval_result_metrics, _ = mt.evaluate(eval_x, eval_y)
+    mt.save(save_path)
+    epoch_end_time = time.time()
 
+    with eval_summary_writer.as_default():
+        mt.sanity_check(eval_x, eval_y, step=e)
+        tf.summary.scalar('loss', eval_result_metrics[0], step=step)
+        tf.summary.scalar('accuracy', eval_result_metrics[1], step=step)
 
+    epoch_time = epoch_end_time - epoch_start_time
+    print(
+        f"Epoch: {e+1}/{epochs}, Eval Loss: {eval_result_metrics[0]:5f}, "
+        + f"Eval Accuracy: {eval_result_metrics[1]:5f}, Time: {epoch_time:3f}s"
+    )
