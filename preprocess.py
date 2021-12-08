@@ -1,16 +1,11 @@
 import pickle
 import os
-import re
 import sys
-import hashlib
 from progress.bar import Bar
 import tensorflow as tf
 import utils
 import params as par
-from processor import encode_midi, decode_midi
-from processor import processor
-import config
-import random
+from processor import encode_midi
 
 
 def preprocess_midi(path):
