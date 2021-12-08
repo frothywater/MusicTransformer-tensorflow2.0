@@ -9,7 +9,7 @@ import random
 from processor import Event
 import utils
 from progress.bar import Bar
-from gen_utils import cropped_words, bar_to_second, softmax, top_k
+from gen_utils import SampleStrategy, cropped_words, bar_to_second, softmax, top_k
 
 tf.executing_eagerly()
 
@@ -411,7 +411,7 @@ class MusicTransformerDecoder(keras.Model):
         config['dist'] = self.dist
         return config
 
-    def generate(self, sample_strategy, prompt_words: list, prompt_bar_length=4, target_bar_length=32):
+    def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length=4, target_bar_length=32):
         prompt_words_cropped = cropped_words(prompt_words, prompt_bar_length)
         decode_array = tf.constant([prompt_words_cropped])
 
@@ -430,9 +430,9 @@ class MusicTransformerDecoder(keras.Model):
                 decode_array, lookup_mask=look_ahead_mask, training=False)
             
             # Sample a word
-            logits = result[:, -1]
-            logits = softmax(logits, temp=sample_strategy.temp)
-            word = top_k(logits, k=sample_strategy.k)
+            logits = result[0, -1].numpy()
+            probs = softmax(logits, temp=sample_strategy.temp)
+            word = top_k(probs, k=sample_strategy.k)
             words.append(word)
 
             # Calculate time for target length
@@ -443,6 +443,9 @@ class MusicTransformerDecoder(keras.Model):
             # Append resulting word to decoding array
             word_tensor = tf.constant([[word]])
             decode_array = tf.concat([decode_array, word_tensor], -1)
+
+            sys.stdout.write(f"{len(words)} tokens, {current_time:.2f}s -> {target_time:.2f}s\r")
+            sys.stdout.flush()
 
         return prompt_words_cropped + words
 

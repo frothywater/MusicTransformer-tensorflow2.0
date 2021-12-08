@@ -1,6 +1,7 @@
-import tensorflow as tf
-from processor import Event
 import numpy as np
+
+from processor import Event
+
 
 def bar_to_second(bar):
     return 60.0 / 120.0 * 4 * bar
@@ -19,13 +20,21 @@ def cropped_words(words: list, bar: int):
         result.append(word)
     return result
 
+
 def softmax(logits, temp=1.0):
     logits -= logits.max()
-    return tf.exp(logits / temp) / tf.sum(tf.exp(logits / temp))
+    return np.exp(logits / temp) / np.sum(np.exp(logits / temp))
 
-def top_k(logits, k):
-    result = tf.math.top_k(logits, k)
-    indices = result.indices.numpy()
-    probs = result.values.numpy()
-    probs /= sum(probs)
-    return np.random.choice(indices, size=1, p=probs)[0]
+
+def top_k(probs, k):
+    sorted_index = np.argsort(probs)[::-1]
+    candi_index = sorted_index[:k]
+    candi_probs = [probs[i] for i in candi_index]
+    candi_probs /= sum(candi_probs)
+    return np.random.choice(candi_index, size=1, p=candi_probs)[0]
+
+
+class SampleStrategy:
+    def __init__(self, temp: float, k: int):
+        self.temp = temp
+        self.k = k
