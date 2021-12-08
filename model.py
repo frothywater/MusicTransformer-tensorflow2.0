@@ -6,8 +6,11 @@ from tensorflow.python import keras
 import json
 import tensorflow_probability as tfp
 import random
+from processor import Event
 import utils
 from progress.bar import Bar
+from gen_utils import cropped_words, bar_to_second, softmax, top_k
+
 tf.executing_eagerly()
 
 
@@ -291,7 +294,7 @@ class MusicTransformerDecoder(keras.Model):
         elif eval:
             return fc, w
         else:
-            return tf.nn.softmax(fc)
+            return fc
 
     def train_on_batch(self, x, y=None, sample_weight=None, class_weight=None, reset_metrics=True):
         if self._debug:
@@ -408,72 +411,40 @@ class MusicTransformerDecoder(keras.Model):
         config['dist'] = self.dist
         return config
 
-    def generate(self, prior: list, beam=None, length=2048, tf_board=False):
-        decode_array = prior
-        decode_array = tf.constant([decode_array])
+    def generate(self, sample_strategy, prompt_words: list, prompt_bar_length=4, target_bar_length=32):
+        prompt_words_cropped = cropped_words(prompt_words, prompt_bar_length)
+        decode_array = tf.constant([prompt_words_cropped])
 
-        # TODO: add beam search
-        if beam is not None:
-            k = beam
-            for i in range(min(self.max_seq, length)):
-                if decode_array.shape[1] >= self.max_seq:
-                    break
-                if i % 100 == 0:
-                    print('generating... {}% completed'.format((i/min(self.max_seq, length))*100))
-                _, _, look_ahead_mask = \
-                    utils.get_masked_with_pad_tensor(decode_array.shape[1], decode_array, decode_array)
+        words = []
+        current_time = bar_to_second(prompt_bar_length)
+        target_time = bar_to_second(target_bar_length)
 
-                result = self.call(decode_array, lookup_mask=look_ahead_mask, training=False, eval=False)
-                if tf_board:
-                    tf.summary.image('generate_vector', tf.expand_dims([result[0]], -1), i)
+        while current_time < target_time:
+            # Slide decoding array
+            if decode_array.shape[1] >= self.max_seq:
+                decode_array = decode_array[:, 1:]
+                
+            _, _, look_ahead_mask = utils.get_masked_with_pad_tensor(
+                decode_array.shape[1], decode_array, decode_array)
+            result = self.call(
+                decode_array, lookup_mask=look_ahead_mask, training=False)
+            
+            # Sample a word
+            logits = result[:, -1]
+            logits = softmax(logits, temp=sample_strategy.temp)
+            word = top_k(logits, k=sample_strategy.k)
+            words.append(word)
 
-                result = result[:,-1,:]
-                result = tf.reshape(result, (1, -1))
-                result, result_idx = tf.nn.top_k(result, k)
-                row = result_idx // par.vocab_size
-                col = result_idx % par.vocab_size
+            # Calculate time for target length
+            event = Event.from_int(word)
+            if event.type == "time_shift":
+                current_time += event.value / 100
 
-                result_array = []
-                for r, c in zip(row[0], col[0]):
-                    prev_array = decode_array[r.numpy()]
-                    result_unit = tf.concat([prev_array, [c.numpy()]], -1)
-                    result_array.append(result_unit.numpy())
-                    # result_array.append(tf.concat([decode_array[idx], result[:,idx_idx]], -1))
-                decode_array = tf.constant(result_array)
-                del look_ahead_mask
-            decode_array = decode_array[0]
+            # Append resulting word to decoding array
+            word_tensor = tf.constant([[word]])
+            decode_array = tf.concat([decode_array, word_tensor], -1)
 
-        else:
-            for i in Bar('generating').iter(range(min(self.max_seq, length))):
-                # print(decode_array.shape[1])
-                if decode_array.shape[1] >= self.max_seq:
-                    break
-                # if i % 100 == 0:
-                #     print('generating... {}% completed'.format((i/min(self.max_seq, length))*100))
-                _, _, look_ahead_mask = \
-                    utils.get_masked_with_pad_tensor(decode_array.shape[1], decode_array, decode_array)
-
-                result = self.call(decode_array, lookup_mask=look_ahead_mask, training=False)
-                if tf_board:
-                    tf.summary.image('generate_vector', tf.expand_dims(result, -1), i)
-                # import sys
-                # tf.print('[debug out:]', result, sys.stdout )
-                u = random.uniform(0, 1)
-                if u > 1:
-                    result = tf.argmax(result[:, -1], -1)
-                    result = tf.cast(result, tf.int32)
-                    decode_array = tf.concat([decode_array, tf.expand_dims(result, -1)], -1)
-                else:
-                    pdf = tfp.distributions.Categorical(probs=result[:, -1])
-                    result = pdf.sample(1)
-                    result = tf.transpose(result, (1, 0))
-                    result = tf.cast(result, tf.int32)
-                    decode_array = tf.concat([decode_array, result], -1)
-                # decode_array = tf.concat([decode_array, tf.expand_dims(result[:, -1], 0)], -1)
-                del look_ahead_mask
-            decode_array = decode_array[0]
-
-        return decode_array.numpy()
+        return prompt_words_cropped + words
 
     def _set_metrics(self):
         accuracy = keras.metrics.SparseCategoricalAccuracy()
