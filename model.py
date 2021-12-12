@@ -355,9 +355,9 @@ class MusicTransformerDecoder(keras.Model):
             result_metric.append(metric(y, tf.nn.softmax(predictions)).numpy())
         return [loss.numpy()] + result_metric, w
 
-    def save(self, filepath, overwrite=True, include_optimizer=False, save_format=None):
+    def save(self, filepath, epoch):
         config_path = filepath+'/'+'config.json'
-        ckpt_path = filepath+'/ckpt'
+        ckpt_path = filepath + f"/ckpt-{epoch}"
 
         self.save_weights(ckpt_path, save_format='tf')
         with open(config_path, 'w') as f:
@@ -370,8 +370,8 @@ class MusicTransformerDecoder(keras.Model):
             config = json.load(f)
         self.__load_config(config)
 
-    def load_ckpt_file(self, filepath, ckpt_name='ckpt'):
-        ckpt_path = filepath + '/' + ckpt_name
+    def load_ckpt_file(self, path_dir):
+        ckpt_path = tf.train.latest_checkpoint(path_dir)
         try:
             self.load_weights(ckpt_path)
         except FileNotFoundError:

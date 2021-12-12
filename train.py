@@ -71,8 +71,10 @@ def main():
         with tf.device(device):
             eval_result_metrics, _ = mt.evaluate(eval_x, eval_y)
 
-        mt.save(params.model_dir)
         epoch_end_time = time.time()
+
+        if (e + 1) % 10 == 0:
+            mt.save(params.model_dir, epoch=e)
 
         with eval_summary_writer.as_default():
             mt.sanity_check(eval_x, eval_y, step=e)
