@@ -1,4 +1,4 @@
-import processor as sequence
+from  processor import pad_word, sos_word, eos_word, dictionary_size
 
 max_seq = 512
 embedding_dim = 256
@@ -7,11 +7,10 @@ batch_size = 60
 dropout = 0.2
 epochs = 100
 
-event_dim = sequence.RANGE_NOTE_ON + sequence.RANGE_NOTE_OFF + sequence.RANGE_TIME_SHIFT + sequence.RANGE_VEL
-pad_token = event_dim
-token_sos = event_dim + 1
-token_eos = event_dim + 2
-vocab_size = event_dim + 3
+pad_token = pad_word
+token_sos = sos_word
+token_eos = eos_word
+vocab_size = dictionary_size
 
 gpu_id = "2"
 train_id = "wikifonia-melody-2"

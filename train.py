@@ -41,7 +41,7 @@ def main():
     print(">>> Start training")
     step = 0
     device = f"/device:GPU:{params.gpu_id}"
-    batch_count = len(dataset.files) // params.batch_size
+    batch_count = len(dataset.file_dict["train"]) // params.batch_size
 
     for e in range(params.epochs):
         mt.reset_metrics()

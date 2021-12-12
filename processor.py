@@ -36,9 +36,9 @@ def create_dict():
 
 
 str2word, word2event = create_dict()
-pad_word = str2word["pad"]
-sos_word = str2word["sos"]
-eos_word = str2word["eos"]
+pad_word = str2word["pad_None"]
+sos_word = str2word["sos_None"]
+eos_word = str2word["eos_None"]
 dictionary_size = len(str2word)
 
 

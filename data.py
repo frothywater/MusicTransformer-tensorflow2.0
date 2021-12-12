@@ -1,3 +1,4 @@
+import os
 import utils
 import random
 import pickle
@@ -8,18 +9,21 @@ import params as par
 
 class Data:
     def __init__(self, dir_path):
-        self.files = list(utils.find_files_by_extensions(dir_path, ['.pickle']))
+        path_train = os.path.join(dir_path, "train")
+        path_valid = os.path.join(dir_path, "valid")
+        path_test = os.path.join(dir_path, "test")
         self.file_dict = {
-            'train': self.files[:int(len(self.files) * 0.8)],
-            'eval': self.files[int(len(self.files) * 0.8): int(len(self.files) * 0.9)],
-            'test': self.files[int(len(self.files) * 0.9):],
+            'train': list(utils.find_files_by_extensions(path_train, ['.pickle'])),
+            'eval': list(utils.find_files_by_extensions(path_valid, ['.pickle'])),
+            'test': list(utils.find_files_by_extensions(path_test, ['.pickle'])),
         }
         self._seq_file_name_idx = 0
         self._seq_idx = 0
+        self.file_count = len(self.file_dict["train"]) + len(self.file_dict["eval"]) + len(self.file_dict["test"])
         pass
 
     def __repr__(self):
-        return '<class Data has "'+str(len(self.files))+'" files>'
+        return f"file_count={self.file_count}"
 
     def batch(self, batch_size, length, mode='train'):
 
