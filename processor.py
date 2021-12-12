@@ -1,280 +1,98 @@
-import pretty_midi
+import mido
 
-
-RANGE_NOTE_ON = 128
-RANGE_NOTE_OFF = 128
-RANGE_VEL = 32
-RANGE_TIME_SHIFT = 100
-
-START_IDX = {
-    'note_on': 0,
-    'note_off': RANGE_NOTE_ON,
-    'time_shift': RANGE_NOTE_ON + RANGE_NOTE_OFF,
-    'velocity': RANGE_NOTE_ON + RANGE_NOTE_OFF + RANGE_TIME_SHIFT
-}
-
-
-class SustainAdapter:
-    def __init__(self, time, type):
-        self.start = time
-        self.type = type
-
-
-class SustainDownManager:
-    def __init__(self, start, end):
-        self.start = start
-        self.end = end
-        self.managed_notes = []
-        self._note_dict = {}  # key: pitch, value: note.start
-
-    def add_managed_note(self, note: pretty_midi.Note):
-        self.managed_notes.append(note)
-
-    def transposition_notes(self):
-        for note in reversed(self.managed_notes):
-            try:
-                note.end = self._note_dict[note.pitch]
-            except KeyError:
-                note.end = max(self.end, note.end)
-            self._note_dict[note.pitch] = note.start
-
-
-# Divided note by note_on, note_off
-class SplitNote:
-    def __init__(self, type, time, value, velocity):
-        ## type: note_on, note_off
-        self.type = type
-        self.time = time
-        self.velocity = velocity
-        self.value = value
-
-    def __repr__(self):
-        return '<[SNote] time: {} type: {}, value: {}, velocity: {}>'\
-            .format(self.time, self.type, self.value, self.velocity)
+beat_division = 16
+unit_per_bar = beat_division * 4
+init_tempo = 500000
+default_velocity = 64
 
 
 class Event:
-    def __init__(self, event_type, value):
-        self.type = event_type
+    def __init__(self, type: str, value=None) -> None:
+        self.type = type
         self.value = value
 
-    def __repr__(self):
-        return '<Event type: {}, value: {}>'.format(self.type, self.value)
-
-    def to_int(self):
-        return START_IDX[self.type] + self.value
-
-    @staticmethod
-    def from_int(int_value):
-        info = Event._type_check(int_value)
-        return Event(info['type'], info['value'])
-
-    @staticmethod
-    def _type_check(int_value):
-        range_note_on = range(0, RANGE_NOTE_ON)
-        range_note_off = range(RANGE_NOTE_ON, RANGE_NOTE_ON+RANGE_NOTE_OFF)
-        range_time_shift = range(
-            RANGE_NOTE_ON+RANGE_NOTE_OFF, RANGE_NOTE_ON+RANGE_NOTE_OFF+RANGE_TIME_SHIFT)
-        range_velocity = range(
-            RANGE_NOTE_ON+RANGE_NOTE_OFF+RANGE_TIME_SHIFT, RANGE_NOTE_ON+RANGE_NOTE_OFF+RANGE_TIME_SHIFT+RANGE_VEL)
-
-        valid_value = int_value
-
-        if int_value in range_note_on:
-            return {'type': 'note_on', 'value': valid_value}
-        elif int_value in range_note_off:
-            valid_value -= RANGE_NOTE_ON
-            return {'type': 'note_off', 'value': valid_value}
-        elif int_value in range_time_shift:
-            valid_value -= (RANGE_NOTE_ON + RANGE_NOTE_OFF)
-            return {'type': 'time_shift', 'value': valid_value}
-        elif int_value in range_velocity:
-            valid_value -= (RANGE_NOTE_ON + RANGE_NOTE_OFF + RANGE_TIME_SHIFT)
-            return {'type': 'velocity', 'value': valid_value}
-        else:
-            # [FIX] prevent velocity value exceed 127
-            return {'type': 'time_shift', 'value': 0}
+    def __str__(self) -> str:
+        return f"{self.type}_{self.value}"
 
 
-def _divide_note(notes):
-    result_array = []
-    notes.sort(key=lambda x: x.start)
-
-    for note in notes:
-        on = SplitNote('note_on', note.start, note.pitch, note.velocity)
-        off = SplitNote('note_off', note.end, note.pitch, None)
-        result_array += [on, off]
-    return result_array
-
-
-def _merge_note(snote_sequence):
-    note_on_dict = {}
-    result_array = []
-
-    for snote in snote_sequence:
-        # print(note_on_dict)
-        if snote.type == 'note_on':
-            note_on_dict[snote.value] = snote
-        elif snote.type == 'note_off':
-            try:
-                on = note_on_dict[snote.value]
-                off = snote
-                if off.time - on.time == 0:
-                    continue
-                result = pretty_midi.Note(
-                    on.velocity, snote.value, on.time, off.time)
-                result_array.append(result)
-                # [FIX] delete on-note entry in the dict after being off
-                del note_on_dict[snote.value]
-            except:
-                print('info removed pitch: {}'.format(snote.value))
-    return result_array
-
-
-def _snote2events(snote: SplitNote, prev_vel: int):
-    result = []
-    if snote.velocity is not None:
-        modified_velocity = snote.velocity // 4
-        if prev_vel != modified_velocity:
-            result.append(Event(event_type='velocity',
-                          value=modified_velocity))
-    result.append(Event(event_type=snote.type, value=snote.value))
-    return result
-
-
-def _event_seq2snote_seq(event_sequence):
-    timeline = 0
-    velocity = 0
-    snote_seq = []
-
-    for event in event_sequence:
-        if event.type == 'time_shift':
-            timeline += ((event.value+1) / 100)
-        # [FIX] one-of-three branches
-        elif event.type == 'velocity':
-            velocity = event.value * 4
-        else:
-            snote = SplitNote(event.type, timeline, event.value, velocity)
-            snote_seq.append(snote)
-    return snote_seq
-
-
-def _make_time_sift_events(prev_time, post_time):
-    time_interval = int(round((post_time - prev_time) * 100))
-    results = []
-    while time_interval >= RANGE_TIME_SHIFT:
-        results.append(Event(event_type='time_shift',
-                       value=RANGE_TIME_SHIFT-1))
-        time_interval -= RANGE_TIME_SHIFT
-    if time_interval == 0:
-        return results
-    else:
-        return results + [Event(event_type='time_shift', value=time_interval-1)]
-
-
-def _control_preprocess(ctrl_changes):
-    sustains = []
-
-    manager = None
-    for ctrl in ctrl_changes:
-        if ctrl.value >= 64 and manager is None:
-            # sustain down
-            manager = SustainDownManager(start=ctrl.time, end=None)
-        elif ctrl.value < 64 and manager is not None:
-            # sustain up
-            manager.end = ctrl.time
-            sustains.append(manager)
-            manager = None
-        elif ctrl.value < 64 and len(sustains) > 0:
-            sustains[-1].end = ctrl.time
-    return sustains
-
-
-def _note_preprocess(susteins, notes):
-    note_stream = []
-
-    if susteins:    # if the midi file has sustain controls
-        for sustain in susteins:
-            for note_idx, note in enumerate(notes):
-                if note.start < sustain.start:
-                    note_stream.append(note)
-                elif note.start > sustain.end:
-                    notes = notes[note_idx:]
-                    sustain.transposition_notes()
-                    break
-                else:
-                    sustain.add_managed_note(note)
-
-        for sustain in susteins:
-            note_stream += sustain.managed_notes
-
-    else:       # else, just push everything into note stream
-        for note_idx, note in enumerate(notes):
-            note_stream.append(note)
-
-    note_stream.sort(key=lambda x: x.start)
-    return note_stream
-
-
-def encode_midi(file_path):
+def create_dict():
     events = []
-    notes = []
-    mid = pretty_midi.PrettyMIDI(midi_file=file_path)
+    note_names = ['C', 'Db', 'D', 'Eb', 'E',
+                  'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
+    chord_qualities = ['maj', 'min', 'dim', 'aug',
+                       'maj7', 'min7', '7', 'm7b5', 'dim7', 'sus']
 
-    for inst in mid.instruments:
-        inst_notes = inst.notes
-        # ctrl.number is the number of sustain control. If you want to know abour the number type of control,
-        # see https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2
-        ctrls = _control_preprocess(
-            [ctrl for ctrl in inst.control_changes if ctrl.number == 64])
-        notes += _note_preprocess(ctrls, inst_notes)
+    events += [Event("note_on", i) for i in range(128)]
+    events += [Event("note_off", i) for i in range(128)]
+    events += [Event("chord", f"{root}_{quality}")
+               for root in note_names for quality in chord_qualities]
+    events += [Event("time_shift", i+1) for i in range(unit_per_bar)]
+    events += [Event("velocity", i) for i in range(128)]
+    events += [Event("pad"), Event("sos"), Event("eos")]
 
-    dnotes = _divide_note(notes)
-
-    # print(dnotes)
-    dnotes.sort(key=lambda x: x.time)
-    # print('sorted:')
-    # print(dnotes)
-    cur_time = 0
-    cur_vel = 0
-    for snote in dnotes:
-        events += _make_time_sift_events(prev_time=cur_time,
-                                         post_time=snote.time)
-        events += _snote2events(snote=snote, prev_vel=cur_vel)
-        # events += _make_time_sift_events(prev_time=cur_time, post_time=snote.time)
-
-        cur_time = snote.time
-        cur_vel = snote.velocity
-
-    return [e.to_int() for e in events]
+    str2word = {str(event): i for i, event in enumerate(events)}
+    word2event = {i: event for i, event in enumerate(events)}
+    return str2word, word2event
 
 
-def decode_midi(idx_array, file_path=None):
-    event_sequence = [Event.from_int(idx) for idx in idx_array]
-    # print(event_sequence)
-    snote_seq = _event_seq2snote_seq(event_sequence)
-    note_seq = _merge_note(snote_seq)
-    note_seq.sort(key=lambda x: x.start)
-
-    mid = pretty_midi.PrettyMIDI()
-    # if want to change instument, see https://www.midi.org/specifications/item/gm-level-1-sound-set
-    instument = pretty_midi.Instrument(1, False, "Developed By Yang-Kichang")
-    instument.notes = note_seq
-
-    mid.instruments.append(instument)
-    if file_path is not None:
-        mid.write(file_path)
-    return mid
+str2word, word2event = create_dict()
+pad_word = str2word["pad"]
+sos_word = str2word["sos"]
+eos_word = str2word["eos"]
+dictionary_size = len(str2word)
 
 
-if __name__ == '__main__':
-    encoded = encode_midi('bin/ADIG04.mid')
-    print(encoded)
-    decided = decode_midi(encoded, file_path='bin/test.mid')
+def encode_midi(path: str):
+    midi = mido.MidiFile(path)
+    events = []
+    for msg in mido.merge_tracks(midi.tracks):
+        if msg.time > 0:
+            delta = round(msg.time / midi.ticks_per_beat * beat_division)
+            if delta > 0 and delta <= unit_per_bar:
+                events.append(Event("time_shift", delta))
+            elif delta > unit_per_bar:
+                while delta > 0:
+                    this_delta = unit_per_bar if delta > unit_per_bar else delta
+                    events.append(Event("time_shift", this_delta))
+                    delta -= this_delta
+        if msg.type == "note_on" and msg.velocity > 0:
+            events.append(Event("velocity", msg.velocity))
+            events.append(Event("note_on", msg.note))
+        elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
+            events.append(Event("note_off", msg.note))
+        elif msg.is_meta and msg.type == "marker" and len(msg.text.split("_")) == 2:
+            events.append(Event("chord", msg.text))
+    words = [str2word[str(event)] for event in events]
+    return words
 
-    ins = pretty_midi.PrettyMIDI('bin/ADIG04.mid')
-    print(ins)
-    print(ins.instruments[0])
-    for i in ins.instruments:
-        print(i.control_changes)
-        print(i.notes)
+
+def decode_midi(words: list, path: str):
+    messages = []
+    next_time_shift = 0
+    current_velocity = default_velocity
+    for word in words:
+        event = word2event[word]
+        if event.type == "time_shift":
+            next_time_shift += event.value
+        elif event.type == "velocity":
+            current_velocity = event.value
+        else:
+            if event.type == "note_on":
+                messages.append(mido.Message(
+                    "note_on", note=event.value, velocity=current_velocity, time=next_time_shift))
+            elif event.type == "note_off":
+                messages.append(mido.Message(
+                    "note_off", note=event.value, time=next_time_shift))
+            elif event.type == "chord":
+                messages.append(mido.MetaMessage(
+                    "marker", text=event.value, time=next_time_shift))
+            else:
+                continue
+            next_time_shift = 0
+
+    midi = mido.MidiFile()
+    midi.ticks_per_beat = beat_division
+    track = mido.MidiTrack()
+    track.extend(messages)
+    midi.tracks.append(track)
+    midi.save(path)
