@@ -11,20 +11,23 @@ from processor import decode_midi
 
 
 def main():
+    device = f"/device:gpu:{params.gpu_id}"
+    os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id
+
     # load data
     dataset = Data(params.dataset_dir)
     test_files = dataset.file_dict["test"]
     os.makedirs(params.generated_dir, exist_ok=True)
 
-    mt = MusicTransformerDecoder(
-        embedding_dim=params.embedding_dim,
-        vocab_size=params.vocab_size,
-        num_layer=params.num_layer,
-        max_seq=params.max_seq,
-        dropout=params.dropout,
-        loader_path=params.model_dir)
+    with tf.device(device):
+        mt = MusicTransformerDecoder(
+            embedding_dim=params.embedding_dim,
+            vocab_size=params.vocab_size,
+            num_layer=params.num_layer,
+            max_seq=params.max_seq,
+            dropout=params.dropout,
+            loader_path=params.model_dir)
 
-    device = f"/device:GPU:{params.gpu_id}"
     sample_strategy = SampleStrategy(temp=1.5, k=10)
 
     for i, file in enumerate(test_files):

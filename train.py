@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 
@@ -11,6 +12,8 @@ from model import MusicTransformerDecoder
 
 
 def main():
+    device = f"/device:gpu:{params.gpu_id}"
+    os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id
     tf.executing_eagerly()
 
     # load data
@@ -22,14 +25,15 @@ def main():
     opt = Adam(learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
 
     # define model
-    mt = MusicTransformerDecoder(
-        embedding_dim=params.embedding_dim,
-        vocab_size=params.vocab_size,
-        num_layer=params.num_layer,
-        max_seq=params.max_seq,
-        dropout=params.dropout,
-        loader_path=params.load_dir)
-    mt.compile(optimizer=opt, loss=callback.transformer_dist_train_loss)
+    with tf.device(device):
+        mt = MusicTransformerDecoder(
+            embedding_dim=params.embedding_dim,
+            vocab_size=params.vocab_size,
+            num_layer=params.num_layer,
+            max_seq=params.max_seq,
+            dropout=params.dropout,
+            loader_path=params.load_dir)
+        mt.compile(optimizer=opt, loss=callback.transformer_dist_train_loss)
 
     # define tensorboard writer
     train_log_dir = 'logs/' + params.train_id + '/train'
@@ -40,7 +44,6 @@ def main():
     # Train Start
     print(">>> Start training")
     step = 0
-    device = f"/device:GPU:{params.gpu_id}"
     batch_count = len(dataset.file_dict["train"]) // params.batch_size
 
     for e in range(params.epochs):
@@ -74,7 +77,7 @@ def main():
         epoch_end_time = time.time()
 
         if (e + 1) % 10 == 0:
-            mt.save(params.model_dir, epoch=e)
+            mt.save(params.model_dir, epoch=e+1)
 
         with eval_summary_writer.as_default():
             mt.sanity_check(eval_x, eval_y, step=e)
