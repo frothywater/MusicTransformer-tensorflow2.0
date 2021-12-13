@@ -90,9 +90,8 @@ def decode_midi(words: list, path: str):
                 continue
             next_time_shift = 0
 
-    midi = mido.MidiFile()
-    midi.ticks_per_beat = beat_division
-    track = mido.MidiTrack()
-    track.extend(messages)
+    midi = mido.MidiFile(ticks_per_beat=beat_division)
+    midi.tracks.append(mido.MidiTrack())    # Add a dummy track
+    track = mido.MidiTrack(messages)
     midi.tracks.append(track)
     midi.save(path)
