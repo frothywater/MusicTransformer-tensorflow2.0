@@ -6,10 +6,10 @@ from tensorflow.python import keras
 import json
 import tensorflow_probability as tfp
 import random
-from processor import Event
+from processor import word2event, unit_per_bar
 import utils
 from progress.bar import Bar
-from gen_utils import SampleStrategy, cropped_words, bar_to_second, softmax, top_k
+from gen_utils import SampleStrategy, cropped_words, softmax, top_k
 
 tf.executing_eagerly()
 
@@ -416,8 +416,8 @@ class MusicTransformerDecoder(keras.Model):
         decode_array = tf.constant([prompt_words_cropped])
 
         words = []
-        current_time = bar_to_second(prompt_bar_length)
-        target_time = bar_to_second(target_bar_length)
+        current_time = prompt_bar_length * unit_per_bar
+        target_time = target_bar_length * unit_per_bar
 
         while current_time < target_time:
             # Slide decoding array
@@ -436,15 +436,15 @@ class MusicTransformerDecoder(keras.Model):
             words.append(word)
 
             # Calculate time for target length
-            event = Event.from_int(word)
+            event = word2event[word]
             if event.type == "time_shift":
-                current_time += event.value / 100
+                current_time += event.value
 
             # Append resulting word to decoding array
             word_tensor = tf.constant([[word]])
             decode_array = tf.concat([decode_array, word_tensor], -1)
 
-            sys.stdout.write(f"{len(words)} tokens, {current_time:.2f}s -> {target_time:.2f}s\r")
+            sys.stdout.write(f"{len(words)} tokens, {current_time} -> {target_time}\r")
             sys.stdout.flush()
 
         return prompt_words_cropped + words

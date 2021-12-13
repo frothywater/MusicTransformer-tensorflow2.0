@@ -1,20 +1,16 @@
 import numpy as np
 
-from processor import Event
-
-
-def bar_to_second(bar):
-    return 60.0 / 120.0 * 4 * bar
+from processor import word2event, unit_per_bar
 
 
 def cropped_words(words: list, bar: int):
     result = []
     current_time = 0
-    target_time = bar_to_second(bar)
+    target_time = bar * unit_per_bar
     for word in words:
-        event = Event.from_int(word)
+        event = word2event[word]
         if event.type == "time_shift":
-            current_time += event.value / 100
+            current_time += event.value
         if current_time > target_time:
             break
         result.append(word)

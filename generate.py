@@ -42,8 +42,8 @@ def main():
         with tf.device(device):
             generated = mt.generate(sample_strategy, words)
 
-        decode_midi(generated, file_path=generated_path)
-        decode_midi(words, file_path=original_path)
+        decode_midi(generated, generated_path)
+        decode_midi(words, original_path)
 
 
 if __name__ == "__main__":
