@@ -2,6 +2,7 @@ import os
 import sys
 import time
 
+import numpy as np
 import tensorflow as tf
 from tensorflow.python.keras.optimizer_v2.adam import Adam
 
@@ -32,12 +33,13 @@ def main():
             num_layer=params.num_layer,
             max_seq=params.max_seq,
             dropout=params.dropout,
-            loader_path=params.load_dir)
+            loader_path=params.load_dir,
+        )
         mt.compile(optimizer=opt, loss=callback.transformer_dist_train_loss)
 
     # define tensorboard writer
-    train_log_dir = 'logs/' + params.train_id + '/train'
-    eval_log_dir = 'logs/' + params.train_id + '/eval'
+    train_log_dir = "logs/" + params.train_id + "/train"
+    eval_log_dir = "logs/" + params.train_id + "/eval"
     train_summary_writer = tf.summary.create_file_writer(train_log_dir)
     eval_summary_writer = tf.summary.create_file_writer(eval_log_dir)
 
@@ -50,6 +52,8 @@ def main():
         mt.reset_metrics()
         epoch_start_time = time.time()
 
+        loss_list = []
+        accuracy_list = []
         for b in range(batch_count):
             batch_start_time = time.time()
             batch_x, batch_y = dataset.slide_seq2seq_batch(params.batch_size, params.max_seq)
@@ -58,37 +62,40 @@ def main():
             batch_end_time = time.time()
 
             with train_summary_writer.as_default():
-                tf.summary.scalar('loss', result_metrics[0], step=step)
-                tf.summary.scalar('accuracy', result_metrics[1], step=step)
+                tf.summary.scalar("loss", result_metrics[0], step=step)
+                tf.summary.scalar("accuracy", result_metrics[1], step=step)
 
             batch_time = batch_end_time - batch_start_time
             sys.stdout.write(
                 f"epoch: {e+1}/{params.epochs}, batch: {b+1}/{batch_count} | "
-                + f"loss: {result_metrics[0]:5f}, accuracy: {result_metrics[1]:5f}, time: {batch_time:3f}s\r"
+                + f"loss: {result_metrics[0]:.5f}, accuracy: {result_metrics[1]:.5f}, time: {batch_time:.3f}s\r"
             )
             sys.stdout.flush()
+            loss_list.append(result_metrics[0])
+            accuracy_list.append(result_metrics[1])
             step += 1
 
         # evaluate
-        eval_x, eval_y = dataset.slide_seq2seq_batch(params.batch_size, params.max_seq, 'eval')
+        eval_x, eval_y = dataset.slide_seq2seq_batch(params.batch_size, params.max_seq, "eval")
         with tf.device(device):
             eval_result_metrics, _ = mt.evaluate(eval_x, eval_y)
 
         epoch_end_time = time.time()
 
-        if (e + 1) % 10 == 0:
-            mt.save(params.model_dir, epoch=e+1)
+        if (e + 1) % 50 == 0:
+            mt.save(params.model_dir, epoch=e + 1)
 
         with eval_summary_writer.as_default():
             mt.sanity_check(eval_x, eval_y, step=e)
-            tf.summary.scalar('loss', eval_result_metrics[0], step=step)
-            tf.summary.scalar('accuracy', eval_result_metrics[1], step=step)
+            tf.summary.scalar("loss", eval_result_metrics[0], step=step)
+            tf.summary.scalar("accuracy", eval_result_metrics[1], step=step)
 
         epoch_time = epoch_end_time - epoch_start_time
-        print(
-            f"Epoch: {e+1}/{params.epochs}, Eval Loss: {eval_result_metrics[0]:5f}, "
-            + f"Eval Accuracy: {eval_result_metrics[1]:5f}, Time: {epoch_time:3f}s"
-        )
+        avg_loss = np.mean(loss_list)
+        avg_accuracy = np.mean(accuracy_list)
+        print(f"Epoch: {e+1}/{params.epochs}, Time: {epoch_time:.3f}s")
+        print(f"\t  Eval Loss: {eval_result_metrics[0]:.5f},  Eval Accuracy: {eval_result_metrics[1]:.5f}")
+        print(f"\t Train Loss: {avg_loss:.5f}, Train Accuracy: {avg_accuracy:.5f}")
 
 
 if __name__ == "__main__":
