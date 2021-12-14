@@ -1,22 +1,33 @@
-from custom.layers import *
-from custom.callback import *
-import params as par
-import sys
-from tensorflow.python import keras
 import json
+import sys
+
+import tensorflow as tf
 import tensorflow_probability as tfp
-import random
-from processor import word2event, unit_per_bar
-import utils
 from progress.bar import Bar
+from tensorflow.python import keras
+
+import params as par
+import utils
+from custom.callback import *
+from custom.layers import *
 from gen_utils import SampleStrategy, cropped_words, softmax, top_k
+from processor import unit_per_bar, word2event
 
 tf.executing_eagerly()
 
 
 class MusicTransformer(keras.Model):
-    def __init__(self, embedding_dim=256, vocab_size=388+2, num_layer=6,
-                 max_seq=2048, dropout=0.2, debug=False, loader_path=None, dist=False):
+    def __init__(
+        self,
+        embedding_dim=256,
+        vocab_size=388 + 2,
+        num_layer=6,
+        max_seq=2048,
+        dropout=0.2,
+        debug=False,
+        loader_path=None,
+        dist=False,
+    ):
         super(MusicTransformer, self).__init__()
         self._debug = debug
         self.max_seq = max_seq
@@ -29,12 +40,20 @@ class MusicTransformer(keras.Model):
             self.load_config_file(loader_path)
 
         self.Encoder = Encoder(
-            d_model=self.embedding_dim, input_vocab_size=self.vocab_size,
-            num_layers=self.num_layer, rate=dropout, max_len=max_seq)
+            d_model=self.embedding_dim,
+            input_vocab_size=self.vocab_size,
+            num_layers=self.num_layer,
+            rate=dropout,
+            max_len=max_seq,
+        )
         self.Decoder = Decoder(
-            num_layers=self.num_layer, d_model=self.embedding_dim,
-            input_vocab_size=self.vocab_size, rate=dropout, max_len=max_seq)
-        self.fc = keras.layers.Dense(self.vocab_size, activation=None, name='output')
+            num_layers=self.num_layer,
+            d_model=self.embedding_dim,
+            input_vocab_size=self.vocab_size,
+            rate=dropout,
+            max_len=max_seq,
+        )
+        self.fc = keras.layers.Dense(self.vocab_size, activation=None, name="output")
 
         self._set_metrics()
 
@@ -57,20 +76,19 @@ class MusicTransformer(keras.Model):
 
     def train_on_batch(self, x, y=None, sample_weight=None, class_weight=None, reset_metrics=True):
         if self._debug:
-            tf.print('sanity:\n',self.sanity_check(x, y, mode='d'), output_stream=sys.stdout)
+            tf.print("sanity:\n", self.sanity_check(x, y, mode="d"), output_stream=sys.stdout)
 
         x, dec_input, target = self.__prepare_train_data(x, y)
 
         enc_mask, tar_mask, look_ahead_mask = utils.get_masked_with_pad_tensor(self.max_seq, x, dec_input)
 
         if self.dist:
-            predictions = self.__dist_train_step(
-                x, dec_input, target, enc_mask, tar_mask, look_ahead_mask, True)
+            predictions = self.__dist_train_step(x, dec_input, target, enc_mask, tar_mask, look_ahead_mask, True)
         else:
             predictions = self.__train_step(x, dec_input, target, enc_mask, tar_mask, look_ahead_mask, True)
 
         if self._debug:
-            print('train step finished')
+            print("train step finished")
         result_metric = []
 
         if self.dist:
@@ -81,12 +99,13 @@ class MusicTransformer(keras.Model):
         for metric in self.custom_metrics:
             result_metric.append(metric(target, predictions).numpy())
 
-        return [loss.numpy()]+result_metric
+        return [loss.numpy()] + result_metric
 
     # @tf.function
     def __dist_train_step(self, inp, inp_tar, out_tar, enc_mask, tar_mask, lookup_mask, training):
         return self._distribution_strategy.experimental_run_v2(
-            self.__train_step, args=(inp, inp_tar, out_tar, enc_mask, tar_mask, lookup_mask, training))
+            self.__train_step, args=(inp, inp_tar, out_tar, enc_mask, tar_mask, lookup_mask, training)
+        )
 
     # @tf.function
     def __train_step(self, inp, inp_tar, out_tar, enc_mask, tar_mask, lookup_mask, training):
@@ -101,16 +120,25 @@ class MusicTransformer(keras.Model):
 
         return predictions
 
-    def evaluate(self, x=None, y=None, batch_size=None, verbose=1, sample_weight=None, steps=None, callbacks=None,
-                 max_queue_size=10, workers=1, use_multiprocessing=False):
+    def evaluate(
+        self,
+        x=None,
+        y=None,
+        batch_size=None,
+        verbose=1,
+        sample_weight=None,
+        steps=None,
+        callbacks=None,
+        max_queue_size=10,
+        workers=1,
+        use_multiprocessing=False,
+    ):
 
         x, inp_tar, out_tar = MusicTransformer.__prepare_train_data(x, y)
         enc_mask, tar_mask, look_ahead_mask = utils.get_masked_with_pad_tensor(self.max_seq, x, inp_tar)
         predictions, weights = self.call(
-                x,
-                targets=inp_tar,
-                src_mask=enc_mask,
-                trg_mask=tar_mask, lookup_mask=look_ahead_mask, training=False, eval=True)
+            x, targets=inp_tar, src_mask=enc_mask, trg_mask=tar_mask, lookup_mask=look_ahead_mask, training=False, eval=True
+        )
         loss = tf.reduce_mean(self.loss(out_tar, predictions))
         result_metric = []
         for metric in self.custom_metrics:
@@ -118,41 +146,39 @@ class MusicTransformer(keras.Model):
         return [loss.numpy()] + result_metric, weights
 
     def save(self, filepath, overwrite=True, include_optimizer=False, save_format=None):
-        config_path = filepath+'/'+'config.json'
-        ckpt_path = filepath+'/ckpt'
+        config_path = filepath + "/" + "config.json"
+        ckpt_path = filepath + "/ckpt"
 
-        self.save_weights(ckpt_path, save_format='tf')
-        with open(config_path, 'w') as f:
+        self.save_weights(ckpt_path, save_format="tf")
+        with open(config_path, "w") as f:
             json.dump(self.get_config(), f)
         return
 
     def load_config_file(self, filepath):
-        config_path = filepath + '/' + 'config.json'
-        with open(config_path, 'r') as f:
+        config_path = filepath + "/" + "config.json"
+        with open(config_path, "r") as f:
             config = json.load(f)
         self.__load_config(config)
 
-    def load_ckpt_file(self, filepath, ckpt_name='ckpt'):
-        ckpt_path = filepath + '/' + ckpt_name
+    def load_ckpt_file(self, filepath, ckpt_name="ckpt"):
+        ckpt_path = filepath + "/" + ckpt_name
         try:
             self.load_weights(ckpt_path)
         except FileNotFoundError:
             print("[Warning] model will be initialized...")
 
-    def sanity_check(self, x, y, mode='v'):
+    def sanity_check(self, x, y, mode="v"):
         # mode: v -> vector, d -> dict
         x, inp_tar, out_tar = MusicTransformer.__prepare_train_data(x, y)
 
         enc_mask, tar_mask, look_ahead_mask = utils.get_masked_with_pad_tensor(self.max_seq, x, inp_tar)
         predictions = self.call(
-            x,
-            targets=inp_tar,
-            src_mask=enc_mask,
-            trg_mask=tar_mask, lookup_mask=look_ahead_mask, training=False)
+            x, targets=inp_tar, src_mask=enc_mask, trg_mask=tar_mask, lookup_mask=look_ahead_mask, training=False
+        )
 
-        if mode == 'v':
+        if mode == "v":
             return predictions
-        elif mode == 'd':
+        elif mode == "d":
             dic = {}
             for row in tf.argmax(predictions, -1).numpy():
                 for col in row:
@@ -166,12 +192,12 @@ class MusicTransformer(keras.Model):
 
     def get_config(self):
         config = {}
-        config['debug'] = self._debug
-        config['max_seq'] = self.max_seq
-        config['num_layer'] = self.num_layer
-        config['embedding_dim'] = self.embedding_dim
-        config['vocab_size'] = self.vocab_size
-        config['dist'] = self.dist
+        config["debug"] = self._debug
+        config["max_seq"] = self.max_seq
+        config["num_layer"] = self.num_layer
+        config["embedding_dim"] = self.embedding_dim
+        config["vocab_size"] = self.vocab_size
+        config["dist"] = self.dist
         return config
 
     def generate(self, prior: list, beam=None, length=2048, tf_board=False):
@@ -185,13 +211,20 @@ class MusicTransformer(keras.Model):
 
             for i in range(min(self.max_seq, length)):
                 if i % 100 == 0:
-                    print('generating... {}% completed'.format((i/min(self.max_seq, length))*100))
-                enc_mask, tar_mask, look_ahead_mask = \
-                    utils.get_masked_with_pad_tensor(decode_array.shape[1], prior, decode_array)
+                    print("generating... {}% completed".format((i / min(self.max_seq, length)) * 100))
+                enc_mask, tar_mask, look_ahead_mask = utils.get_masked_with_pad_tensor(
+                    decode_array.shape[1], prior, decode_array
+                )
 
-                result = self.call(prior, targets=decode_array, src_mask=enc_mask,
-                                    trg_mask=tar_mask, lookup_mask=look_ahead_mask, training=False)
-                result = result[:,-1,:]
+                result = self.call(
+                    prior,
+                    targets=decode_array,
+                    src_mask=enc_mask,
+                    trg_mask=tar_mask,
+                    lookup_mask=look_ahead_mask,
+                    training=False,
+                )
+                result = result[:, -1, :]
                 result = tf.reshape(result, (1, -1))
                 result, result_idx = tf.nn.top_k(result, k)
                 row = result_idx // par.vocab_size
@@ -210,14 +243,21 @@ class MusicTransformer(keras.Model):
             decode_array = decode_array[0]
         else:
             decode_array = tf.constant([decode_array])
-            for i in Bar('generating').iter(range(min(self.max_seq, length))):
+            for i in Bar("generating").iter(range(min(self.max_seq, length))):
                 # if i % 100 == 0:
                 #     print('generating... {}% completed'.format((i/min(self.max_seq, length))*100))
-                enc_mask, tar_mask, look_ahead_mask = \
-                    utils.get_masked_with_pad_tensor(decode_array.shape[1], prior, decode_array)
+                enc_mask, tar_mask, look_ahead_mask = utils.get_masked_with_pad_tensor(
+                    decode_array.shape[1], prior, decode_array
+                )
 
-                result = self.call(prior, targets=decode_array, src_mask=enc_mask,
-                                    trg_mask=tar_mask, lookup_mask=look_ahead_mask, training=False)
+                result = self.call(
+                    prior,
+                    targets=decode_array,
+                    src_mask=enc_mask,
+                    trg_mask=tar_mask,
+                    lookup_mask=look_ahead_mask,
+                    training=False,
+                )
                 result = tf.argmax(result, -1)
                 result = tf.cast(result, tf.int32)
                 decode_array = tf.concat([decode_array, tf.expand_dims(result[:, -1], 0)], -1)
@@ -231,12 +271,12 @@ class MusicTransformer(keras.Model):
         self.custom_metrics = [accuracy]
 
     def __load_config(self, config):
-        self._debug = config['debug']
-        self.max_seq = config['max_seq']
-        self.num_layer = config['num_layer']
-        self.embedding_dim = config['embedding_dim']
-        self.vocab_size = config['vocab_size']
-        self.dist = config['dist']
+        self._debug = config["debug"]
+        self.max_seq = config["max_seq"]
+        self.num_layer = config["num_layer"]
+        self.embedding_dim = config["embedding_dim"]
+        self.vocab_size = config["vocab_size"]
+        self.dist = config["dist"]
 
     @staticmethod
     def __prepare_train_data(x, y):
@@ -262,8 +302,17 @@ class MusicTransformer(keras.Model):
 
 
 class MusicTransformerDecoder(keras.Model):
-    def __init__(self, embedding_dim=256, vocab_size=388+2, num_layer=6,
-                 max_seq=2048, dropout=0.2, debug=False, loader_path=None, dist=False):
+    def __init__(
+        self,
+        embedding_dim=256,
+        vocab_size=388 + 2,
+        num_layer=6,
+        max_seq=2048,
+        dropout=0.2,
+        debug=False,
+        loader_path=None,
+        dist=False,
+    ):
         super(MusicTransformerDecoder, self).__init__()
 
         if loader_path is not None:
@@ -277,9 +326,13 @@ class MusicTransformerDecoder(keras.Model):
             self.dist = dist
 
         self.Decoder = Encoder(
-            num_layers=self.num_layer, d_model=self.embedding_dim,
-            input_vocab_size=self.vocab_size, rate=dropout, max_len=max_seq)
-        self.fc = keras.layers.Dense(self.vocab_size, activation=None, name='output')
+            num_layers=self.num_layer,
+            d_model=self.embedding_dim,
+            input_vocab_size=self.vocab_size,
+            rate=dropout,
+            max_len=max_seq,
+        )
+        self.fc = keras.layers.Dense(self.vocab_size, activation=None, name="output")
 
         self._set_metrics()
 
@@ -298,20 +351,19 @@ class MusicTransformerDecoder(keras.Model):
 
     def train_on_batch(self, x, y=None, sample_weight=None, class_weight=None, reset_metrics=True):
         if self._debug:
-            tf.print('sanity:\n', self.sanity_check(x, y, mode='d'), output_stream=sys.stdout)
+            tf.print("sanity:\n", self.sanity_check(x, y, mode="d"), output_stream=sys.stdout)
 
         x, y = self.__prepare_train_data(x, y)
 
         _, _, look_ahead_mask = utils.get_masked_with_pad_tensor(self.max_seq, x, x)
 
         if self.dist:
-            predictions = self.__dist_train_step(
-                x, y, look_ahead_mask, True)
+            predictions = self.__dist_train_step(x, y, look_ahead_mask, True)
         else:
             predictions = self.__train_step(x, y, look_ahead_mask, True)
 
         if self._debug:
-            print('train step finished')
+            print("train step finished")
         result_metric = []
 
         if self.dist:
@@ -322,19 +374,18 @@ class MusicTransformerDecoder(keras.Model):
         for metric in self.custom_metrics:
             result_metric.append(metric(y, predictions).numpy())
 
-        return [loss.numpy()]+result_metric
+        return [loss.numpy()] + result_metric
 
     # @tf.function
     def __dist_train_step(self, inp_tar, out_tar, lookup_mask, training):
         return self._distribution_strategy.experimental_run_v2(
-            self.__train_step, args=(inp_tar, out_tar, lookup_mask, training))
+            self.__train_step, args=(inp_tar, out_tar, lookup_mask, training)
+        )
 
     # @tf.function
     def __train_step(self, inp_tar, out_tar, lookup_mask, training):
         with tf.GradientTape() as tape:
-            predictions = self.call(
-                inputs=inp_tar, lookup_mask=lookup_mask, training=training
-            )
+            predictions = self.call(inputs=inp_tar, lookup_mask=lookup_mask, training=training)
             self.loss_value = self.loss(out_tar, predictions)
         gradients = tape.gradient(self.loss_value, self.trainable_variables)
         self.grad = gradients
@@ -342,13 +393,23 @@ class MusicTransformerDecoder(keras.Model):
 
         return predictions
 
-    def evaluate(self, x=None, y=None, batch_size=None, verbose=1, sample_weight=None, steps=None, callbacks=None,
-                 max_queue_size=10, workers=1, use_multiprocessing=False):
+    def evaluate(
+        self,
+        x=None,
+        y=None,
+        batch_size=None,
+        verbose=1,
+        sample_weight=None,
+        steps=None,
+        callbacks=None,
+        max_queue_size=10,
+        workers=1,
+        use_multiprocessing=False,
+    ):
 
         # x, inp_tar, out_tar = MusicTransformer.__prepare_train_data(x, y)
         _, _, look_ahead_mask = utils.get_masked_with_pad_tensor(self.max_seq, x, x)
-        predictions, w = self.call(
-                x, lookup_mask=look_ahead_mask, training=False, eval=True)
+        predictions, w = self.call(x, lookup_mask=look_ahead_mask, training=False, eval=True)
         loss = tf.reduce_mean(self.loss(y, predictions))
         result_metric = []
         for metric in self.custom_metrics:
@@ -356,17 +417,17 @@ class MusicTransformerDecoder(keras.Model):
         return [loss.numpy()] + result_metric, w
 
     def save(self, filepath, epoch):
-        config_path = filepath+'/'+'config.json'
+        config_path = filepath + "/" + "config.json"
         ckpt_path = filepath + f"/ckpt-{epoch}"
 
-        self.save_weights(ckpt_path, save_format='tf')
-        with open(config_path, 'w') as f:
+        self.save_weights(ckpt_path, save_format="tf")
+        with open(config_path, "w") as f:
             json.dump(self.get_config(), f)
         return
 
     def load_config_file(self, filepath):
-        config_path = filepath + '/' + 'config.json'
-        with open(config_path, 'r') as f:
+        config_path = filepath + "/" + "config.json"
+        with open(config_path, "r") as f:
             config = json.load(f)
         self.__load_config(config)
 
@@ -377,18 +438,17 @@ class MusicTransformerDecoder(keras.Model):
         except FileNotFoundError:
             print("[Warning] model will be initialized...")
 
-    def sanity_check(self, x, y, mode='v', step=None):
+    def sanity_check(self, x, y, mode="v", step=None):
         # mode: v -> vector, d -> dict
         # x, inp_tar, out_tar = self.__prepare_train_data(x, y)
 
         _, tar_mask, look_ahead_mask = utils.get_masked_with_pad_tensor(self.max_seq, x, x)
-        predictions = self.call(
-            x, lookup_mask=look_ahead_mask, training=False)
+        predictions = self.call(x, lookup_mask=look_ahead_mask, training=False)
 
-        if mode == 'v':
-            tf.summary.image('vector', tf.expand_dims(predictions, -1), step)
+        if mode == "v":
+            tf.summary.image("vector", tf.expand_dims(predictions, -1), step)
             return predictions
-        elif mode == 'd':
+        elif mode == "d":
             dic = {}
             for row in tf.argmax(predictions, -1).numpy():
                 for col in row:
@@ -398,17 +458,17 @@ class MusicTransformerDecoder(keras.Model):
                         dic[str(col)] = 1
             return dic
         else:
-            tf.summary.image('tokens', tf.argmax(predictions, -1), step)
+            tf.summary.image("tokens", tf.argmax(predictions, -1), step)
             return tf.argmax(predictions, -1)
 
     def get_config(self):
         config = {}
-        config['debug'] = self._debug
-        config['max_seq'] = self.max_seq
-        config['num_layer'] = self.num_layer
-        config['embedding_dim'] = self.embedding_dim
-        config['vocab_size'] = self.vocab_size
-        config['dist'] = self.dist
+        config["debug"] = self._debug
+        config["max_seq"] = self.max_seq
+        config["num_layer"] = self.num_layer
+        config["embedding_dim"] = self.embedding_dim
+        config["vocab_size"] = self.vocab_size
+        config["dist"] = self.dist
         return config
 
     def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length=4, target_bar_length=32):
@@ -423,12 +483,10 @@ class MusicTransformerDecoder(keras.Model):
             # Slide decoding array
             if decode_array.shape[1] >= self.max_seq:
                 decode_array = decode_array[:, 1:]
-                
-            _, _, look_ahead_mask = utils.get_masked_with_pad_tensor(
-                decode_array.shape[1], decode_array, decode_array)
-            result = self.call(
-                decode_array, lookup_mask=look_ahead_mask, training=False)
-            
+
+            _, _, look_ahead_mask = utils.get_masked_with_pad_tensor(decode_array.shape[1], decode_array, decode_array)
+            result = self.call(decode_array, lookup_mask=look_ahead_mask, training=False)
+
             # Sample a word
             logits = result[0, -1].numpy()
             probs = softmax(logits, temp=sample_strategy.temp)
@@ -454,12 +512,12 @@ class MusicTransformerDecoder(keras.Model):
         self.custom_metrics = [accuracy]
 
     def __load_config(self, config):
-        self._debug = config['debug']
-        self.max_seq = config['max_seq']
-        self.num_layer = config['num_layer']
-        self.embedding_dim = config['embedding_dim']
-        self.vocab_size = config['vocab_size']
-        self.dist = config['dist']
+        self._debug = config["debug"]
+        self.max_seq = config["max_seq"]
+        self.num_layer = config["num_layer"]
+        self.embedding_dim = config["embedding_dim"]
+        self.vocab_size = config["vocab_size"]
+        self.dist = config["dist"]
 
     def reset_metrics(self):
         for metric in self.custom_metrics:
@@ -479,23 +537,3 @@ class MusicTransformerDecoder(keras.Model):
         # method without eos
         # x = data.add_noise(x, rate=0.01)
         return x, y
-
-
-if __name__ == '__main__':
-    # import utils
-    print(tf.executing_eagerly())
-
-    src = tf.constant([utils.fill_with_placeholder([1,2,3,4],max_len=2048)])
-    trg = tf.constant([utils.fill_with_placeholder([1,2,3,4],max_len=2048)])
-    src_mask, trg_mask, lookup_mask = utils.get_masked_with_pad_tensor(2048, src,trg)
-    print(lookup_mask)
-    print(src_mask)
-    mt = MusicTransformer(debug=True, embedding_dim=par.embedding_dim, vocab_size=par.vocab_size)
-    mt.save_weights('my_model.h5', save_format='h5')
-    mt.load_weights('my_model.h5')
-    result = mt.generate([27, 186,  43, 213, 115, 131], length=100)
-    print(result)
-    from deprecated import sequence
-
-    sequence.EventSeq.from_array(result[0]).to_note_seq().to_midi_file('result.midi')
-    pass
