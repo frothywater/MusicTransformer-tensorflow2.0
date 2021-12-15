@@ -8,7 +8,6 @@ from tensorflow.python.keras.optimizer_v2.adam import Adam
 
 import params
 from custom import callback
-from data import Data
 from model import MusicTransformerDecoder
 
 
@@ -18,8 +17,12 @@ def main():
     tf.executing_eagerly()
 
     # load data
-    dataset = Data(params.dataset_dir)
-    print(dataset)
+    train_data = np.load(os.path.join(params.dataset_dir, "train.npz"))
+    valid_data = np.load(os.path.join(params.dataset_dir, "valid.npz"))
+    train_x = train_data["x"]
+    train_y = train_data["y"]
+    valid_x = valid_data["x"]
+    valid_y = valid_data["y"]
 
     # load model
     learning_rate = callback.CustomSchedule(params.embedding_dim)
@@ -39,26 +42,30 @@ def main():
 
     # define tensorboard writer
     train_log_dir = "logs/" + params.train_id + "/train"
-    eval_log_dir = "logs/" + params.train_id + "/eval"
+    valid_log_dir = "logs/" + params.train_id + "/valid"
     train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-    eval_summary_writer = tf.summary.create_file_writer(eval_log_dir)
+    valid_summary_writer = tf.summary.create_file_writer(valid_log_dir)
 
     # Train Start
     print(">>> Start training")
     step = 0
-    batch_count = len(dataset.file_dict["train"]) // params.batch_size
+    batch_count = len(train_x)
+    valid_batch_count = len(valid_x)
+    latest_valid_loss = None
+    times_valid_loss_increased = 0
+    early_stop_patience = 5
 
     for e in range(params.epochs):
         mt.reset_metrics()
         epoch_start_time = time.time()
 
+        # Train
         loss_list = []
         accuracy_list = []
         for b in range(batch_count):
             batch_start_time = time.time()
-            batch_x, batch_y = dataset.slide_seq2seq_batch(params.batch_size, params.max_seq)
             with tf.device(device):
-                result_metrics = mt.train_on_batch(batch_x, batch_y)
+                result_metrics = mt.train_on_batch(train_x[b], train_y[b])
             batch_end_time = time.time()
 
             with train_summary_writer.as_default():
@@ -75,28 +82,55 @@ def main():
             accuracy_list.append(result_metrics[1])
             step += 1
 
-        # evaluate
-        eval_x, eval_y = dataset.slide_seq2seq_batch(params.batch_size, params.max_seq, "eval")
-        with tf.device(device):
-            eval_result_metrics, _ = mt.evaluate(eval_x, eval_y)
+        # Validate
+        valid_loss_list = []
+        valid_accuracy_list = []
+        for b in range(valid_batch_count):
+            batch_start_time = time.time()
+            with tf.device(device):
+                metrics, _ = mt.evaluate(valid_x[b], valid_y[b])
+            batch_end_time = time.time()
+
+            batch_time = batch_end_time - batch_start_time
+            sys.stdout.write(
+                f"valid: {e+1}/{params.epochs}, batch: {b+1}/{valid_batch_count} | "
+                + f"loss: {metrics[0]:.5f}, accuracy: {metrics[1]:.5f}, time: {batch_time:.3f}s\r"
+            )
+            sys.stdout.flush()
+            valid_loss_list.append(metrics[0])
+            valid_accuracy_list.append(metrics[1])
 
         epoch_end_time = time.time()
 
-        if (e + 1) % 50 == 0:
-            mt.save(params.model_dir, epoch=e + 1)
-
-        with eval_summary_writer.as_default():
-            mt.sanity_check(eval_x, eval_y, step=e)
-            tf.summary.scalar("loss", eval_result_metrics[0], step=step)
-            tf.summary.scalar("accuracy", eval_result_metrics[1], step=step)
-
-        epoch_time = epoch_end_time - epoch_start_time
         avg_loss = np.mean(loss_list)
         avg_accuracy = np.mean(accuracy_list)
+        avg_valid_loss = np.mean(valid_loss_list)
+        avg_valid_accuracy = np.mean(valid_accuracy_list)
+
+        with valid_summary_writer.as_default():
+            tf.summary.scalar("loss", avg_valid_loss, step=step)
+            tf.summary.scalar("accuracy", avg_valid_accuracy, step=step)
+
+        epoch_time = epoch_end_time - epoch_start_time
         print(f"Epoch: {e+1}/{params.epochs}, Time: {epoch_time:.3f}s")
-        print(f"\t  Eval Loss: {eval_result_metrics[0]:.5f},  Eval Accuracy: {eval_result_metrics[1]:.5f}")
+        print(f"\t Valid Loss: {avg_valid_loss:.5f}, Valid Accuracy: {avg_valid_accuracy:.5f}")
         print(f"\t Train Loss: {avg_loss:.5f}, Train Accuracy: {avg_accuracy:.5f}")
 
+        # Save every 20 epochs
+        if (e + 1) % 20 == 0:
+            mt.save(params.model_dir, epoch=e + 1)
+
+        # Early stopping
+        if latest_valid_loss is not None:
+            if avg_valid_loss >= latest_valid_loss:
+                times_valid_loss_increased += 1
+            else:
+                times_valid_loss_increased = 0
+        if times_valid_loss_increased >= early_stop_patience:
+            print("Early stopped.")
+            mt.save(params.model_dir, epoch=e + 1)
+            break
+        latest_valid_loss = avg_valid_loss
 
 if __name__ == "__main__":
     main()
