@@ -55,7 +55,7 @@ def compile(words_path: str, dest_path: str):
             words = pickle.load(file)
 
         word_length = len(words)
-        for offset in get_offsets(word_length, params.max_seq, density=20):
+        for offset in get_offsets(word_length, params.max_seq, density=60):
             x, y = shifted_sliding_pair(words, offset, params.max_seq, pad_word, eos_word)
             xs.append(x)
             ys.append(y)
