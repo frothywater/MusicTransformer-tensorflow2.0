@@ -51,7 +51,7 @@ def main():
     step = 0
     batch_count = len(train_x)
     valid_batch_count = len(valid_x)
-    latest_valid_loss = None
+    min_valid_loss = None
     times_valid_loss_increased = 0
     early_stop_patience = 5
 
@@ -116,21 +116,17 @@ def main():
         print(f"\t Valid Loss: {avg_valid_loss:.5f}, Valid Accuracy: {avg_valid_accuracy:.5f}")
         print(f"\t Train Loss: {avg_loss:.5f}, Train Accuracy: {avg_accuracy:.5f}")
 
-        # Save every 20 epochs
-        if (e + 1) % 20 == 0:
-            mt.save(params.model_dir, epoch=e + 1)
+        mt.save(params.model_dir, epoch=e + 1)
 
         # Early stopping
-        if latest_valid_loss is not None:
-            if avg_valid_loss >= latest_valid_loss:
-                times_valid_loss_increased += 1
-            else:
-                times_valid_loss_increased = 0
+        if min_valid_loss is None or avg_valid_loss < min_valid_loss:
+            min_valid_loss = avg_valid_loss
+            times_valid_loss_increased = 0
+        else:
+            times_valid_loss_increased += 1
         if times_valid_loss_increased >= early_stop_patience:
             print("Early stopped.")
-            mt.save(params.model_dir, epoch=e + 1)
             break
-        latest_valid_loss = avg_valid_loss
 
 if __name__ == "__main__":
     main()
