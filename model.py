@@ -10,7 +10,7 @@ import params as par
 import utils
 from custom.callback import *
 from custom.layers import *
-from gen_utils import SampleStrategy, cropped_words, softmax, top_k
+from generate_utils import SampleStrategy, cropped_words, softmax, top_k
 from processor import unit_per_bar, word2event
 
 tf.executing_eagerly()
@@ -431,10 +431,9 @@ class MusicTransformerDecoder(keras.Model):
             config = json.load(f)
         self.__load_config(config)
 
-    def load_ckpt_file(self, path_dir):
-        ckpt_path = tf.train.latest_checkpoint(path_dir)
+    def load_ckpt_file(self, filepath):
         try:
-            self.load_weights(ckpt_path)
+            self.load_weights(filepath)
         except FileNotFoundError:
             print("[Warning] model will be initialized...")
 
