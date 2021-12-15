@@ -4,8 +4,7 @@ import pickle
 import tensorflow as tf
 
 import params
-from data import Data
-from gen_utils import SampleStrategy
+from generate_utils import SampleStrategy, get_test_files
 from model import MusicTransformerDecoder
 from processor import decode_midi
 
@@ -15,8 +14,7 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id
 
     # load data
-    dataset = Data(params.dataset_dir)
-    test_files = dataset.file_dict["test"]
+    test_files = get_test_files(params.words_dir)
     os.makedirs(params.generated_dir, exist_ok=True)
 
     with tf.device(device):

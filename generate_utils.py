@@ -1,6 +1,13 @@
+import os
+
 import numpy as np
 
-from processor import word2event, unit_per_bar
+from processor import unit_per_bar, word2event
+
+
+def get_test_files(words_dir: str) -> list:
+    test_dir = os.path.join(words_dir, "test")
+    return [os.path.join(test_dir, file) for file in os.listdir(test_dir) if file.endswith(".pickle")]
 
 
 def cropped_words(words: list, bar: int):
