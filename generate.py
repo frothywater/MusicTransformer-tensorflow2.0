@@ -15,7 +15,8 @@ def main():
 
     # load data
     test_files = get_test_files(params.words_dir)
-    os.makedirs(params.generated_dir, exist_ok=True)
+    generated_dir = os.path.join(params.generated_dir, str(params.load_epoch))
+    os.makedirs(generated_dir, exist_ok=True)
 
     with tf.device(device):
         mt = MusicTransformerDecoder(
@@ -33,8 +34,8 @@ def main():
     for i, file in enumerate(test_files):
         filename = os.path.basename(file).replace(".mid.pickle", "")
         print(f"[{i+1}/{len(test_files)}] {filename}")
-        generated_path = os.path.join(params.generated_dir, f"{filename}_generated.mid")
-        original_path = os.path.join(params.generated_dir, f"{filename}_original.mid")
+        generated_path = os.path.join(generated_dir, f"{filename}_generated.mid")
+        original_path = os.path.join(generated_dir, f"{filename}_original.mid")
 
         with open(file, "rb") as pickle_file:
             words = pickle.load(pickle_file)
