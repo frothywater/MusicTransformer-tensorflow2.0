@@ -4,7 +4,7 @@ import pickle
 import tensorflow as tf
 
 import params
-from generate_utils import SampleStrategy, get_test_files
+from generate_utils import SampleStrategy, cropped_words, get_test_files
 from model import MusicTransformerDecoder
 from processor import decode_midi
 
@@ -24,7 +24,9 @@ def main():
             num_layer=params.num_layer,
             max_seq=params.max_seq,
             dropout=params.dropout,
-            loader_path=params.model_dir)
+            loader_path=params.model_dir,
+            load_epoch=params.load_epoch,
+        )
 
     sample_strategy = SampleStrategy(temp=1.5, k=10)
 
@@ -40,8 +42,9 @@ def main():
         with tf.device(device):
             generated = mt.generate(sample_strategy, words)
 
+        words_cropped = cropped_words(words, 32)
         decode_midi(generated, generated_path)
-        decode_midi(words, original_path)
+        decode_midi(words_cropped, original_path)
 
 
 if __name__ == "__main__":

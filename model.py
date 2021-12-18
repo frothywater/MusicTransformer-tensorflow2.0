@@ -311,6 +311,7 @@ class MusicTransformerDecoder(keras.Model):
         dropout=0.2,
         debug=False,
         loader_path=None,
+        load_epoch=None,
         dist=False,
     ):
         super(MusicTransformerDecoder, self).__init__()
@@ -337,7 +338,7 @@ class MusicTransformerDecoder(keras.Model):
         self._set_metrics()
 
         if loader_path is not None:
-            self.load_ckpt_file(loader_path)
+            self.load_ckpt_file(loader_path, load_epoch)
 
     def call(self, inputs, training=None, eval=None, lookup_mask=None):
         decoder, w = self.Decoder(inputs, training=training, mask=lookup_mask)
@@ -431,9 +432,10 @@ class MusicTransformerDecoder(keras.Model):
             config = json.load(f)
         self.__load_config(config)
 
-    def load_ckpt_file(self, filepath):
+    def load_ckpt_file(self, filepath, epoch):
+        ckpt_path = filepath + f"/ckpt-{epoch}"
         try:
-            self.load_weights(filepath)
+            self.load_weights(ckpt_path)
         except FileNotFoundError:
             print("[Warning] model will be initialized...")
 
@@ -470,7 +472,7 @@ class MusicTransformerDecoder(keras.Model):
         config["dist"] = self.dist
         return config
 
-    def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length=4, target_bar_length=32):
+    def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length=1, target_bar_length=32):
         prompt_words_cropped = cropped_words(prompt_words, prompt_bar_length)
         decode_array = tf.constant([prompt_words_cropped])
 
