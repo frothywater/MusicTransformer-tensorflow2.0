@@ -10,6 +10,15 @@ def get_test_files(words_dir: str) -> list:
     return [os.path.join(test_dir, file) for file in os.listdir(test_dir) if file.endswith(".pickle")]
 
 
+def bar_length(words: list):
+    result = 0.0
+    for word in words:
+        event = word2event[word]
+        if event.type == "time_shift":
+            result += event.value / unit_per_bar
+    return result
+
+
 def cropped_words(words: list, bar: int):
     result = []
     current_time = 0
