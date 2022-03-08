@@ -12,11 +12,11 @@ token_sos = sos_word
 token_eos = eos_word
 vocab_size = dictionary_size
 
-gpu_id = "0"
-train_id = "wikifonia-melody-v4"
+gpu_id = "1"
+train_id = "wikifonia-melody-v5"
 model_dir = "data/model"
 load_dir = None
-load_epoch = 4
+load_epoch = 5
 generated_dir = "data/generated"
 dataset_dir = "data/dataset"
 words_dir = "data/words"
