@@ -13,10 +13,9 @@ token_eos = eos_word
 vocab_size = dictionary_size
 
 gpu_id = "1"
-train_id = "wikifonia-melody-v5"
+train_id = "other-baseline-v1"
 model_dir = "data/model"
-load_dir = None
 load_epoch = 5
-generated_dir = "data/generated"
-dataset_dir = "data/dataset"
 words_dir = "data/words"
+dataset_dir = "data/dataset"
+generated_dir = "data/generated"

@@ -1,8 +1,9 @@
-from tensorflow.python import keras
-import tensorflow as tf
-import params as par
 import sys
-from tensorflow.python.keras.optimizer_v2.learning_rate_schedule import LearningRateSchedule
+
+import params as par
+import tensorflow as tf
+from keras.optimizer_v2.learning_rate_schedule import LearningRateSchedule
+from tensorflow import keras
 
 
 class MTFitCallback(keras.callbacks.Callback):

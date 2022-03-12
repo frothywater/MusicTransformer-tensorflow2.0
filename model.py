@@ -2,9 +2,8 @@ import json
 import sys
 
 import tensorflow as tf
-import tensorflow_probability as tfp
 from progress.bar import Bar
-from tensorflow.python import keras
+from tensorflow import keras
 
 import params as par
 import utils

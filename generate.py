@@ -15,7 +15,8 @@ def main():
 
     # load data
     test_files = get_test_files(params.words_dir)
-    os.makedirs(params.generated_dir, exist_ok=True)
+    generated_dir = os.path.join(params.generated_dir, f"{params.train_id}_{params.load_epoch}")
+    os.makedirs(generated_dir, exist_ok=True)
 
     with tf.device(device):
         mt = MusicTransformerDecoder(
@@ -35,12 +36,9 @@ def main():
 
         with open(file, "rb") as pickle_file:
             words = pickle.load(pickle_file)
-        if bar_length(words) < 32:
-            print("This song is shorter than 32 bars, skip.")
-            continue
 
-        generated_path = os.path.join(params.generated_dir, f"{filename}_generated.mid")
-        original_path = os.path.join(params.generated_dir, f"{filename}_original.mid")
+        generated_path = os.path.join(generated_dir, f"{filename}_generated.mid")
+        original_path = os.path.join(generated_dir, f"{filename}_original.mid")
 
         with tf.device(device):
             generated = mt.generate(sample_strategy, words)

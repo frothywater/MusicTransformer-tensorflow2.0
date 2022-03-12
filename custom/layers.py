@@ -1,8 +1,9 @@
-import tensorflow as tf
-import math as m
-from tensorflow.python import keras
-import numpy as np
 import math
+import math as m
+
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
 
 
 def sinusoid(max_seq, embedding_dim):

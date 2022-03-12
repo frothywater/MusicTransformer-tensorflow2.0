@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.keras.optimizer_v2.adam import Adam
+from keras.optimizer_v2.adam import Adam
 
 import params
 from custom import callback
