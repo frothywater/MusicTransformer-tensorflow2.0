@@ -12,10 +12,11 @@ token_sos = sos_word
 token_eos = eos_word
 vocab_size = dictionary_size
 
-gpu_id = "1"
-train_id = "other-baseline-v1"
+gpu_id = "2"
+train_id = "wikifonia-0315"
 model_dir = "data/model"
-load_epoch = 5
+load_dir = None
+load_epoch = None
 words_dir = "data/words"
 dataset_dir = "data/dataset"
 generated_dir = "data/generated"

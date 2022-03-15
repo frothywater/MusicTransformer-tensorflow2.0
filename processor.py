@@ -8,7 +8,7 @@ beat_division = 4
 unit_per_bar = beat_division * 4
 init_tempo = 500000
 
-pitch_range = range(48,84)  # C3-C5
+pitch_range = range(36,84)  # C2-C5
 note_names = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 chord_qualities = ['M','m','o','+','MM7','Mm7','mM7','mm7','o7','%7','+7','M7','sus']
 

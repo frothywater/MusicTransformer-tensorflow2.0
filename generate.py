@@ -15,7 +15,7 @@ def main():
 
     # load data
     test_files = get_test_files(params.words_dir)
-    generated_dir = os.path.join(params.generated_dir, f"{params.train_id}_{params.load_epoch}")
+    generated_dir = os.path.join(params.generated_dir)
     os.makedirs(generated_dir, exist_ok=True)
 
     with tf.device(device):
