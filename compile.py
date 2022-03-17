@@ -24,7 +24,7 @@ def shifted_sliding_pair(words: list, offset: int, length: int, pad_word: int, e
     return x, y
 
 
-def get_offsets(length: int, max_length: int, density: int, mode: str) -> list:
+def get_offsets(length: int, max_length: int, density: int) -> list:
     offset_count = round(density * (length / max_length - 1) + 1)
     if offset_count <= 1:
         return [0]
@@ -43,22 +43,24 @@ def pad_with_repetition(array: list, unit_length: int) -> list:
     return result
 
 
-def compile(words_path: str, dest_path: str, mode: str):
+def compile(words_path: str, dest_path: str):
     files = [file for file in os.listdir(words_path) if file.endswith(".pickle")]
 
     xs = []
     ys = []
 
-    for filename in files:
+    for i, filename in enumerate(files):
         file_path = os.path.join(words_path, filename)
         with open(file_path, "rb") as file:
             words = pickle.load(file)
 
         word_length = len(words)
-        for offset in get_offsets(word_length, params.max_seq, density=60, mode=mode):
+        offsets = get_offsets(word_length, params.max_seq, density=20)
+        for offset in offsets:
             x, y = shifted_sliding_pair(words, offset, params.max_seq, pad_word, eos_word)
             xs.append(x)
             ys.append(y)
+        print(f"[{i+1}/{len(files)}] {word_length=} {len(offsets)=}")
 
     pairs = list(zip(xs, ys))
     padded_pairs = pad_with_repetition(pairs, params.batch_size)
@@ -77,7 +79,7 @@ def main():
         words_path = os.path.join(params.words_dir, dir_name)
         dest_path = os.path.join(params.dataset_dir, dir_name + ".npz")
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        compile(words_path, dest_path, mode=dir_name)
+        compile(words_path, dest_path)
 
 
 if __name__ == "__main__":

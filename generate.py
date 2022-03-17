@@ -4,7 +4,7 @@ import pickle
 import tensorflow as tf
 
 import params
-from generate_utils import SampleStrategy, bar_length, get_test_files
+from generate_utils import SampleStrategy, get_test_files
 from model import MusicTransformerDecoder
 from processor import decode_midi
 
@@ -28,7 +28,7 @@ def main():
             loader_path=params.model_dir,
             load_epoch=params.load_epoch)
 
-    sample_strategy = SampleStrategy(temp=1.5, k=10)
+    sample_strategy = SampleStrategy(temp=1.2, k=5)
 
     for i, file in enumerate(test_files):
         filename = os.path.basename(file).replace(".mid.pickle", "")

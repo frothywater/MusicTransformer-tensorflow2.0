@@ -8,6 +8,7 @@ Do separately for training and valid dataset:
 ```
 python preprocess.py data/midi/train data/words/train
 python preprocess.py data/midi/valid data/words/valid
+python preprocess.py data/midi/test data/words/test
 python compile.py
 python train.py
 python generate.py

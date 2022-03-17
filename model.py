@@ -471,7 +471,7 @@ class MusicTransformerDecoder(keras.Model):
         config["dist"] = self.dist
         return config
 
-    def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length=1, target_bar_length=32):
+    def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length=4, target_bar_length=32):
         prompt_words_cropped = cropped_words(prompt_words, prompt_bar_length)
         decode_array = tf.constant([prompt_words_cropped])
 

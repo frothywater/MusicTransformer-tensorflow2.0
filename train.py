@@ -37,6 +37,7 @@ def main():
             max_seq=params.max_seq,
             dropout=params.dropout,
             loader_path=params.load_dir,
+            load_epoch=params.load_epoch
         )
         mt.compile(optimizer=opt, loss=callback.transformer_dist_train_loss)
 
@@ -51,11 +52,13 @@ def main():
     step = 0
     batch_count = len(train_x)
     valid_batch_count = len(valid_x)
+
     min_valid_loss = None
     times_valid_loss_increased = 0
     early_stop_patience = 5
 
-    for e in range(params.epochs):
+    start_epoch = params.load_epoch if params.load_epoch else 0
+    for e in range(start_epoch, params.epochs):
         mt.reset_metrics()
         epoch_start_time = time.time()
 
