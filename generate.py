@@ -9,13 +9,13 @@ from model import MusicTransformerDecoder
 from processor import decode_midi
 
 
-def main():
+def main(prompt_bar: int, target_bar: int):
     device = f"/device:gpu:{params.gpu_id}"
     os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id
 
     # load data
     test_files = get_test_files(params.words_dir)
-    generated_dir = os.path.join(params.generated_dir)
+    generated_dir = os.path.join(params.generated_dir, f"prompt-{prompt_bar}-target-{target_bar}")
     os.makedirs(generated_dir, exist_ok=True)
 
     with tf.device(device):
@@ -26,7 +26,8 @@ def main():
             max_seq=params.max_seq,
             dropout=params.dropout,
             loader_path=params.model_dir,
-            load_epoch=params.load_epoch)
+            load_epoch=params.load_epoch,
+        )
 
     sample_strategy = SampleStrategy(temp=1.2, k=5)
 
@@ -41,11 +42,12 @@ def main():
         original_path = os.path.join(generated_dir, f"{filename}_original.mid")
 
         with tf.device(device):
-            generated = mt.generate(sample_strategy, words)
+            generated = mt.generate(sample_strategy, words, prompt_bar_length=prompt_bar, target_bar_length=target_bar)
 
         decode_midi(generated, generated_path)
         decode_midi(words, original_path)
 
 
 if __name__ == "__main__":
-    main()
+    main(4, 32)
+    # main(8, 64)

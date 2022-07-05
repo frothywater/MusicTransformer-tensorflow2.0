@@ -435,6 +435,7 @@ class MusicTransformerDecoder(keras.Model):
         ckpt_path = filepath + f"/ckpt-{epoch}"
         try:
             self.load_weights(ckpt_path)
+            print(f"Model loaded: {ckpt_path}")
         except FileNotFoundError:
             print("[Warning] model will be initialized...")
 
@@ -471,7 +472,7 @@ class MusicTransformerDecoder(keras.Model):
         config["dist"] = self.dist
         return config
 
-    def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length=4, target_bar_length=32):
+    def generate(self, sample_strategy: SampleStrategy, prompt_words: list, prompt_bar_length, target_bar_length):
         prompt_words_cropped = cropped_words(prompt_words, prompt_bar_length)
         decode_array = tf.constant([prompt_words_cropped])
 
